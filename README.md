@@ -63,11 +63,197 @@ socketio-chat/
 
 Your work will be automatically submitted when you push to your GitHub Classroom repository. Make sure to:
 
-1. Complete both the client and server portions of the application
+1. Complete both the client and server portions of the application                                                                                                     {
+  "name": "socketio-chat-server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.0",
+    "cors": "^2.8.5"
+  }
+}const express = require('express');
+const http = require('http');
+const cors = require('cors');
+const { setupSocket } = require('./socket/socket');
+
+const app = express();
+app.use(cors());
+const server = http.createServer(app);
+
+setupSocket(server);
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
 2. Implement the core chat functionality
+import React, { useContext, useEffect, useState } from 'react';
+import { UserContext } from '../context/UserContext';
+import { socket } from '../socket/socket';
+
+export default function ChatPage() {
+  const { username } = useContext(UserContext);
+  const [users, setUsers] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [message, setMessage] = useState('');
+  const [toUserId, setToUserId] = useState(null);
+
+  useEffect(() => {
+    socket.on('user_joined', ({ username }) => {
+      setMessages(prev => [...prev, { system: true, text: `${username} joined.` }]);
+    });
+
+    socket.on('user_left', ({ username }) => {
+      setMessages(prev => [...prev, { system: true, text: `${username} left.` }]);
+    });
+
+    socket.on('active_users', userList => {
+      setUsers(userList);
+    });
+
+    socket.on('receive_message', msg => {
+      setMessages(prev => [...prev, msg]);
+    });
+
+    return () => socket.off();
+  }, []);
+
+  const send = () => {
+    if (!message.trim()) return;
+    socket.emit('send_message', { toUserId, message });
+    setMessage('');
+  };
+
+  return (
+    <div style={{ display: 'flex' }}>
+      <div style={{ width: 200, padding: 10, borderRight: '1px solid #ccc' }}>
+        <h3>Users</h3>
+        <button onClick={() => setToUserId(null)}>Public</button>
+        {users.map(user => (
+          <div key={user.userId}>
+            {user.username}
+            <button onClick={() => setToUserId(user.userId)}>PM</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ flex: 1, padding: 10 }}>
+        <div style={{ height: 300, overflowY: 'scroll', border: '1px solid #ccc', padding: 5 }}>
+          {messages.map((m, i) =>
+            m.system ? (
+              <div key={i} style={{ color: 'gray' }}>{m.text}</div>
+            ) : (
+              <div key={i}>
+                <strong>{m.from}</strong>{m.toUserId ? ' (private)' : ''}: {m.message}
+              </div>
+            )
+          )}
+        </div>
+        <input
+          style={{ width: '80%' }}
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && send()}
+        />
+        <button onClick={send}>Send</button>
+      </div>
+    </div>
+  );
+}
 3. Add at least 3 advanced features
-4. Document your setup process and features in the README.md
+Add Typing Events
+In server/socket/socket.js, add:
+
+js
+Copy
+Edit
+socket.on('typing', () => {
+  socket.broadcast.emit('user_typing', { username: users[socket.id] });
+});
+
+socket.on('stop_typing', () => {
+  socket.broadcast.emit('user_stop_typing', { username: users[socket.id] });
+});
+⚛️ Client Side: Update ChatPage.jsx
+jsx
+Copy
+Edit
+const [typingUsers, setTypingUsers] = useState([]);
+
+useEffect(() => {
+  socket.on('user_typing', ({ username }) => {
+    setTypingUsers(prev => [...new Set([...prev, username])]);
+  });
+  socket.on('user_stop_typing', ({ username }) => {
+    setTypingUsers(prev => prev.filter(name => name !== username));
+  });
+}, []);
+Then, inside the render section:
+
+jsx
+Copy
+Edit
+{typingUsers.length > 0 && (
+  <div style={{ color: 'gray' }}>
+    {typingUsers.join(', ')} typing...
+  </div>
+)}
+In the <input>:
+
+jsx
+Copy
+Edit
+onChange={e => {
+  setMessage(e.target.value);
+  socket.emit(e.target.value ? 'typing' : 'stop_typing');
+}}
+💾 2. Chat History with MongoDB
+🔧 Add Mongoose to server
+bash
+Copy
+Edit
+cd server
+npm install mongoose
+server/models/Message.js
+js
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const messageSchema = new mongoose.Schema({
+  from: String,
+  toUserId: String,
+  message: String,
+  timestamp: { type: Date, default: Date.now }
+});
+
+module.exports = mongoose.model('Message', messageSchema);
+
+4. Document your setup process and features in the README.md                                                                                                          # 🔌 Socket.IO Chat Application
+
+A real-time chat application built with **React**, **Node.js**, **Express**, and **Socket.IO**, featuring private messaging, typing indicators, chat history,
 5. Include screenshots or GIFs of your working application
+socketio-chat/
+├── assets/
+│   ├── chat-screenshot.png
+│   └── typing-indicator.gif
+├── client/
+├── server/
+└── README.md
+## 📷 Screenshots
+
+### 🧑‍🤝‍🧑 Group Chat in Action
+
+![Chat UI](./assets/chat-screenshot.png)
+
+---
+
+### ⌨️ Typing Indicator (Live)
+
+![Typing Indicator](./assets/typing-indicator.gif)
 6. Optional: Deploy your application and add the URLs to your README.md
 
 ## Resources
